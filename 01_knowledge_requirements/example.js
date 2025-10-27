@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import assert from 'assert'
 import 'dotenv/config'
 
 const apiKey = process.env['OPENAI_API_KEY']
@@ -34,12 +35,14 @@ const evaluateGeneratedAnswer = async (expectedAnswer, generatedAnswer) => {
     return sendToOpenAI(prompt)
 }
 
+let testResults = []
 let generatedAnswers = []
 for (const [index, question] of questions.entries()) {
     const answer = await sendToOpenAI(question)
     const result = await evaluateGeneratedAnswer(answers[index], answer)
 
     generatedAnswers.push({ question, answer, evaluationPassed: result === 'PASS' })
+    testResults.push(result === 'PASS' ? 'PASS' : 'FAIL')
 }
 
-console.log(generatedAnswers)
+assert(testResults.includes('PASS'))

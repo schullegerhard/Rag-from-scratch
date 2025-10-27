@@ -1,0 +1,13 @@
+{
+  "name": "rag-from-scratch",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "test": "node 01_knowledge_requirements/example.js"
+  },
+  "type": "module",
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "openai": "^6.7.0"
+  }
+}

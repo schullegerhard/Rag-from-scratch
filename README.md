@@ -8,7 +8,7 @@ make advanced AI concepts approachable for developers through minimal, well-expl
 
 ---
 
-## 🚀 What You'll Learn
+## What You'll Learn
 
 - **What RAG really is** — and why it’s so powerful for knowledge retrieval.  
 - **How embeddings work** — turn text into numbers your model can understand.  
@@ -18,7 +18,7 @@ make advanced AI concepts approachable for developers through minimal, well-expl
 
 ---
 
-## 🧠 Concept Overview
+## Concept Overview
 
 Retrieval-Augmented Generation (RAG) enhances language models by giving them access to **external knowledge**.  
 Instead of asking the model to “remember” everything, you let it **retrieve relevant context** before generating a response.
@@ -33,7 +33,7 @@ Instead of asking the model to “remember” everything, you let it **retrieve 
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 rag-from-scratch/
@@ -48,20 +48,24 @@ rag-from-scratch/
 │ └── example.js
 │       // Explain how enterprise or local data becomes the knowledge base.
 │       // Add a small dataset (like 5 FAQ entries) for hands-on experiments.
-├── 02_intro_to_embeddings/
+├── 03_data_loading/
+│ └── example.js // Indexing
+├── 04_text_splitting_and_chunking/
+│ └── example.js // Indexing
+├── 05_intro_to_embeddings/
 │   ├── 01_text_similarity_basics.js
 │   │   // Compute similarity using cosine similarity on short numeric vectors.
 │   │   // No real model — helps visualize the math intuition.
 │   └── 02_generate_embeddings.js
 │       // Show how to convert text → embeddings (e.g., via API or mock vectors).
-├── 03_building_vector_store/
+├── 06_building_vector_store/
 │   ├── 01_in_memory_store.js
 │   │   // Build a mini vector store with JS arrays and cosine search.
 │   ├── 02_nearest_neighbor_search.js
 │   │   // Visualize how nearest-neighbor search works in code.
 │   └── example.js
 │       // Wrap both to simulate a minimal vector DB.
-├── 04_retrieval_pipeline/
+├── 07_retrieval_pipeline/
 │   ├── 01_query_rewriting.js
 │   │   // Show how rewriting affects retrieval results (e.g., synonyms).
 │   ├── 02_rank_results.js
@@ -70,15 +74,15 @@ rag-from-scratch/
 │   │   // Add fallback logic for empty or poor matches.
 │   └── example.js
 │       // Chain all parts to simulate the full retrieval flow.
-├── 05_rag_in_action/
+├── 08_rag_in_action/
 │   └── example.js
 │       // Combine retrieval with a simple LLM stub (e.g., template-based generator).
 │       // Example: “Based on {context}, the answer is...”
 │
-├── 06_evaluating_rag_quality/
+├── 09_evaluating_rag_quality/
 │ └── example.js
 │     // Measure retrieval precision, recall, and LLM accuracy.
-├── 07_observability_and_caching/
+├── 10_observability_and_caching/
 │ └── example.js
 │     // Show caching repeated queries and logging performance.
 └── README.md
@@ -99,7 +103,7 @@ Each folder contains:
 
 ---
 
-## 🧰 Requirements
+## Requirements
 
 - Node.js 18+  
 - Local LLM (node-llama-cpp)  
@@ -132,7 +136,7 @@ If you have a clear, educational RAG example, open a PR.
 
 See Also
 
-[AI Agents from Scratch](https://github.com/pguso/ai-agents-from-scratch)
-[LangChain RAG Concepts](https://docs.langchain.com/oss/python/langchain/rag)
-[Best AI tools for RAG](https://codingscape.com/blog/best-ai-tools-for-retrieval-augmented-generation-rag)
+- [AI Agents from Scratch](https://github.com/pguso/ai-agents-from-scratch)
+- [LangChain RAG Concepts](https://docs.langchain.com/oss/python/langchain/rag)
+- [Best AI tools for RAG](https://codingscape.com/blog/best-ai-tools-for-retrieval-augmented-generation-rag)
 

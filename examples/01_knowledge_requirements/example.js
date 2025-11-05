@@ -1,4 +1,4 @@
-import { LlamaPrompter } from "../helpers/llama-prompter.js";
+import { LlamaPrompter } from "../../helpers/llama-prompter.js";
 import assert from 'assert'
 
 const prompter = new LlamaPrompter();

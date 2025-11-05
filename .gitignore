@@ -140,4 +140,10 @@ vite.config.ts.timestamp-*
 
 .idea
 
-models
+docs
+embeddings_storage
+
+test*
+
+*.gguf
+*.GGUF

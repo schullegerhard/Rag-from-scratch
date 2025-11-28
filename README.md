@@ -40,6 +40,71 @@ Instead of asking the model to “remember” everything, you let it **retrieve 
 
 ---
 
+## Learning Path
+
+Follow these examples in order to build understanding progressively:
+
+### 1. **Data Loading**
+`examples/02_data_loading/`  
+[Code](examples/02_data_loading/example.js) | [Code Explanation](examples/02_data_loading/CODE.md) | [Concepts](examples/02_data_loading/CONCEPT.md)
+
+**What you'll learn:**
+- Loading raw text data
+- Normalizing and preparing documents
+
+**Key concepts:** file I/O, preprocessing, document structure
+
+---
+
+### 2. **Text Splitting & Chunking**
+`examples/03_text_splitting_and_chunking/`  
+[Code](examples/03_text_splitting_and_chunking/example.js) | [Code Explanation](examples/03_text_splitting_and_chunking/CODE.md) | [Concepts](examples/03_text_splitting_and_chunking/CONCEPT.md)
+
+**What you'll learn:**
+- How to split long text into manageable chunks
+- Overlaps, boundaries, and chunk strategies
+
+**Key concepts:** chunking logic, context windows, granularity trade-offs
+
+---
+
+### 3. **Embedding**
+`examples/04_intro_to_embeddings/02_generate_embeddings/`  
+[Code](examples/04_intro_to_embeddings/02_generate_embeddings/example.js) | [Code Explanation](examples/04_intro_to_embeddings/02_generate_embeddings/CODE.md) | [Concepts](examples/04_intro_to_embeddings/02_generate_embeddings/CONCEPT.md)
+
+**What you'll learn:**
+- How embeddings represent meaning as vectors
+- How to generate embeddings locally
+
+**Key concepts:** vector representation, similarity, embedding models
+
+---
+
+### 4. **Vector Store**
+`examples/05_building_vector_store/01_in_memory_store/`  
+[Code](examples/05_building_vector_store/01_in_memory_store/example.js) | [Code Explanation](examples/05_building_vector_store/01_in_memory_store/CODE.md) | [Concepts](examples/05_building_vector_store/01_in_memory_store/CONCEPT.md)
+
+**What you'll learn:**
+- How to store embeddings
+- How nearest-neighbor search works
+
+**Key concepts:** indexing, vector search, metadata storage
+
+---
+
+### 5. **Basic Retrieval**
+`examples/06_retrieval_strategies/01_basic_retrieval/`  
+[Code](examples/06_retrieval_strategies/01_basic_retrieval/example.js) | [Code Explanation](examples/06_retrieval_strategies/01_basic_retrieval/CODE.md) | [Concepts](examples/06_retrieval_strategies/01_basic_retrieval/CONCEPT.md)
+
+**What you'll learn:**
+- Retrieving relevant chunks from the vector store
+- Understanding similarity scoring
+
+**Key concepts:** cosine similarity, scoring, top-k retrieval
+
+---
+
+
 ## Project Structure
 
 ```

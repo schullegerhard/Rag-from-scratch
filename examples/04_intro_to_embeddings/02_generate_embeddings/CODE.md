@@ -14,8 +14,12 @@ This example teaches you how to scale from 10 documents (01_text_similarity_basi
 
 ```javascript
 async function initializeEmbeddingModel() {
-    const llama = await getLlama({ logLevel: 'error' });
-    const model = await llama.loadModel({ modelPath: MODEL_PATH });
+    const llama = await getLlama({
+        logLevel: 'error'
+    });
+    const model = await llama.loadModel({
+        modelPath: MODEL_PATH
+    });
     return await model.createEmbeddingContext();
 }
 ```
@@ -105,11 +109,19 @@ async function saveEmbeddingsJSON(embeddings, filename) {
 ### 4. Load Embeddings
 
 ```javascript
-async function loadEmbeddingsJSON(filename) {
-    const filepath = path.join(STORAGE_DIR, filename);
-    const content = await fs.readFile(filepath, 'utf-8');
-    const data = JSON.parse(content);
-    return data.embeddings;
+async function loadExistingEmbeddings(filename) {
+    try {
+        const embeddings = await loadEmbeddingsJSON(filename);
+        const embeddingMap = new Map();
+
+        for (const item of embeddings) {
+            embeddingMap.set(item.id, item);
+        }
+
+        return embeddingMap;
+    } catch (error) {
+        return new Map(); // No existing embeddings
+    }
 }
 ```
 
@@ -141,10 +153,20 @@ async function incrementalEmbedding(context, newDocuments, existingFilename) {
     }
 
     // Generate embeddings only for new documents
-    const newEmbeddings = await generateEmbeddings(context, documentsToEmbed);
-    
+    const newEmbeddings = await generateEmbeddings(
+        context,
+        documentsToEmbed,
+        (current, total) => {
+            process.stdout.write(`\rEmbedding: ${current}/${total}`);
+        }
+    );
+    console.log(); // New line
+
     // Merge with existing
-    return [...Array.from(existingMap.values()), ...newEmbeddings];
+    return [
+        ...Array.from(existingMap.values()),
+        ...newEmbeddings
+    ];
 }
 ```
 

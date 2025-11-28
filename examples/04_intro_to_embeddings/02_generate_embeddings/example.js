@@ -17,8 +17,7 @@ import {fileURLToPath} from "url";
 import path from "path";
 import fs from "fs/promises";
 import {getLlama} from "node-llama-cpp";
-import {Document, PDFLoader} from '../../../src/index.js';
-import {RecursiveCharacterTextSplitter} from '../../03_text_splitting_and_chunking/example.js';
+import {Document, PDFLoader, RecursiveCharacterTextSplitter} from '../../../src/index.js';
 import {OutputHelper} from "../../../helpers/output-helper.js";
 import chalk from "chalk";
 
@@ -470,7 +469,7 @@ async function example6() {
         const pdfUrl = 'https://arxiv.org/pdf/2402.19473'; // Example paper
 
         console.log(`${chalk.bold('Step 1:')} Load PDF`);
-        const loader = new PDFLoader('https://arxiv.org/pdf/2402.19473', {splitPages: true});
+        const loader = new PDFLoader(pdfUrl, {splitPages: true});
 
         const docs = await OutputHelper.withSpinner(
             'Downloading PDF...',

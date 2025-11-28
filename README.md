@@ -100,7 +100,7 @@ Follow these examples in order to build understanding progressively:
 - Retrieving relevant chunks from the vector store
 - Understanding similarity scoring
 
-**Key concepts:** cosine similarity, scoring, top-k retrieval
+**Key concepts:** augment, scoring, top-k retrieval
 
 ---
 

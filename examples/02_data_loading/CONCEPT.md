@@ -15,6 +15,16 @@
 
 ---
 
+![image](../../images/indexing.png)
+
+Examples and how they map to the diagram
+- 02_data_loading = Knowledge Sources <- you are here
+- 03_text_splitting_and_chunking = Chunking
+- 04_intro_to_embeddings = Embedding
+- 05_building_vector_store = Vector Database
+
+---
+
 ## Introduction to Document Loading
 
 ### What is Document Loading?

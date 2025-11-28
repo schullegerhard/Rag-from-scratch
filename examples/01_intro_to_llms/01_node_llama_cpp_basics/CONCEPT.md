@@ -1,3 +1,5 @@
+![image](../../../images/using-external-data.png)
+
 # Concepts: LLMs and node-llama-cpp
 
 ## What is a Large Language Model (LLM)?
@@ -69,18 +71,18 @@ Your CPU/GPU (actual computation)
 
 ### Advantages
 
-✅ **Privacy:** Your data never leaves your machine
-✅ **No API Costs:** Run unlimited inference for free (after downloading models)
-✅ **Offline Capable:** Works without internet connection
-✅ **Full Control:** Customize everything from temperature to context size
-✅ **Fast Iteration:** No API rate limits when developing
+- **Privacy:** Your data never leaves your machine 
+- **No API Costs:** Run unlimited inference for free (after downloading models)
+- **Offline Capable:** Works without internet connection
+- **Full Control:** Customize everything from temperature to context size
+- **Fast Iteration:** No API rate limits when developing
 
 ### Trade-offs
 
-⚠️ **Hardware Requirements:** Needs decent RAM (8GB+ for small models, 16GB+ for larger ones)
-⚠️ **Model Size:** Models are several gigabytes to download
-⚠️ **Speed:** Slower than cloud APIs (but faster than you might expect!)
-⚠️ **Quality:** Smaller local models are less capable than frontier models like GPT-4
+- **Hardware Requirements:** Needs decent RAM (8GB+ for small models, 16GB+ for larger ones) 
+- **Model Size:** Models are several gigabytes to download 
+- **Speed:** Slower than cloud APIs (but faster than you might expect!) 
+- **Quality:** Smaller local models are less capable than frontier models like GPT-4
 
 ## Key Concepts in node-llama-cpp
 

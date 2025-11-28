@@ -1,3 +1,5 @@
+![image](./images/rag.png)
+
 # RAG from Scratch
 
 **Demystify Retrieval-Augmented Generation (RAG) by building it yourself - step by step.**  
@@ -102,8 +104,8 @@ Instead of asking the model to “remember” everything, you let it **retrieve 
 │   ├── 00_how_rag_works/
 │   │   └── example.js                      # Minimal RAG simulation with naive keyword search
 │   │
-│   ├── 01_knowledge_requirements/
-│   │   └── example.js                      # Define what knowledge is needed and where it comes from
+│   ├── 01_intro_to_llms/
+│   │   └── example.js                      # Introduction to LLMs, the brain of your RAG system
 │   │
 │   ├── 02_data_loading/
 │   │   └── example.js                      # Load and preprocess raw text data
@@ -152,6 +154,9 @@ Instead of asking the model to “remember” everything, you let it **retrieve 
 │   │
 │   ├── 12_graph_db_integration/
 │   │   └── example.js                      # Graph database using kuzu npm package
+│   │
+│   ├── 13_knowledge_requiremens/
+│   │   └── example.js                      # Define what knowledge is needed and where it comes from
 │   │
 │   ├── tutorials/                          # Higher-level guides
 │   │   ├── basic-rag-pipeline.js

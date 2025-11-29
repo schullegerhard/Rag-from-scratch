@@ -100,9 +100,9 @@ export class PDFLoader extends BaseLoader {
         const pages = info.total;
         const documents = [];
 
-        console.log(`Extracted ${pages} document(s). First page snippet:\n`);
+        // console.log(`Extracted ${pages} document(s). First page snippet:\n`);
         const firstPageText = (await parser.getText({ partial: [1] })).text;
-        console.log(firstPageText.substring(0, 500).trim() + '...');
+        // console.log(firstPageText.substring(0, 500).trim() + '...');
 
         if (this.splitPages) {
             for (let i = 0; i < pages; i++) {

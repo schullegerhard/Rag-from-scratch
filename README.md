@@ -44,6 +44,19 @@ Instead of asking the model to “remember” everything, you let it **retrieve 
 
 Follow these examples in order to build understanding progressively:
 
+### 0. **How RAG Works**
+`examples/00_how_rag_works/`  
+[Code](examples/00_how_rag_works/example.js) | [Code Explanation](examples/00_how_rag_works/CODE.md) | [Concepts](examples/00_how_rag_works/CONCEPT.md)
+
+**What you'll learn:**
+- The core idea behind Retrieval-Augmented Generation
+- How retrieval and generation work together
+- A minimal, simplified end-to-end RAG flow in under 70 lines of code
+
+**Key concepts:** retrieval, generation, context injection, similarity search
+
+---
+
 ### 1. **Data Loading**
 `examples/02_data_loading/`  
 [Code](examples/02_data_loading/example.js) | [Code Explanation](examples/02_data_loading/CODE.md) | [Concepts](examples/02_data_loading/CONCEPT.md)
@@ -101,6 +114,8 @@ Follow these examples in order to build understanding progressively:
 - Understanding similarity scoring
 
 **Key concepts:** augment, scoring, top-k retrieval
+
+At the end you can look into [Showcase](examples/06_retrieval_strategies/01_basic_retrieval/showcase.js) to see everything you learned so far in action.
 
 ---
 

@@ -119,6 +119,29 @@ At the end you can look into [Showcase](examples/06_retrieval_strategies/01_basi
 
 ---
 
+### 7. **Query Preprocessing**
+`examples/06_retrieval_strategies/02_query_preprocessing/`  
+[Code](examples/06_retrieval_strategies/02_query_preprocessing/example.js) | [Code Explanation](examples/06_retrieval_strategies/02_query_preprocessing/CODE.md) | [Concepts](examples/06_retrieval_strategies/02_query_preprocessing/CONCEPT.md)
+
+**What you'll learn:**
+- Cleaning and normalizing user queries before embedding
+- Reducing noise and improving embedding consistency
+
+**Key concepts:** normalization, stopword removal, query cleaning, vector stability
+
+---
+
+### 8. **Hybrid Search**
+`examples/06_retrieval_strategies/03_hybrid_search/`  
+[Code](examples/06_retrieval_strategies/03_hybrid_search/example.js) | [Code Explanation](examples/06_retrieval_strategies/03_hybrid_search/CODE.md) | [Concepts](examples/06_retrieval_strategies/03_hybrid_search/CONCEPT.md)
+
+**What you'll learn:**
+- Combining multiple retrieval strategies (e.g., vector + keyword)
+- Balancing semantic similarity with traditional search signals
+
+**Key concepts:** hybrid scoring, weighted search, BM25 + embeddings, multi-strategy retrieval
+
+---
 
 ## Project Structure
 

@@ -28,7 +28,7 @@ Imagine you're looking for a restaurant:
 **Both friends together** (Hybrid search):
 - Friend #1 finds Italian restaurants (concept)
 - Friend #2 finds "Alfredo's Pizza" (exact name)
-- You get the best of both! 🎯
+- You get the best of both! 
 
 ---
 

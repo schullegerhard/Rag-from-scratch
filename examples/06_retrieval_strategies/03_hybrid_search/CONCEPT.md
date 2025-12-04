@@ -1,4 +1,4 @@
-# Hybrid Search 
+# Hybrid Search
 
 ## What is Hybrid Search?
 
@@ -32,691 +32,1045 @@ Imagine you're looking for a restaurant:
 
 ---
 
-## Why Do We Need Hybrid Search?
+## The Real Problem Nobody Talks About
 
-### The Problem with Using Only One Approach
+Most tutorials tell you "combine vector search with keyword search" and show you a 0.5/0.5 weight split. That's it. But when you build this with real product data, you immediately hit these problems:
 
-**Scenario 1: You search for "GraphQL API"**
+### Problem #1: SKU Codes Break Vector Search
 
-**Semantic search alone:**
+**The scenario:**
 ```
-✓ Finds: Documents about APIs in general
-✓ Understands: GraphQL is a type of API
-✗ Problem: Might rank generic "API" docs higher than "GraphQL" docs
-```
+Query: "MBP-M3MAX-32-1TB"
+Vector search returns: Generic laptop descriptions ✗
+Keyword search returns: Exact product match ✓
 
-**Keyword search alone:**
-```
-✓ Finds: Exact word "GraphQL" 
-✗ Problem: Misses related concepts like "graph-based query language"
+Why? Vector embeddings don't understand alphanumeric codes!
 ```
 
-**Hybrid search:**
+**Real example:**
 ```
-✓ Finds exact "GraphQL" mentions (from keyword search)
-✓ Understands API context (from semantic search)
-✓ Ranks documents with both "GraphQL" AND API concepts highest
-= Perfect match! ✨
-```
+Product in your catalog:
+  Title: "Apple MacBook Pro 16-inch M3 Max"
+  SKU: "MBP-M3MAX-32-1TB"
+  Description: "Powerful laptop with advanced M3 Max chip..."
 
-### When Each Approach Shines
-
-**Semantic search is best for:**
-- Natural questions: "How do I deploy applications at scale?"
-- Conceptual queries: "Best practices for data storage"
-- When you don't know exact terminology
-
-**Keyword search is best for:**
-- Specific terms: "PostgreSQL ACID transactions"
-- Acronyms: "CNN transformer architecture"
-- Technical documentation searches
-
-**Hybrid search is best for:**
-- Everything! It adapts to what you need.
-
----
-
-## How Does Hybrid Search Work?
-
-### The Basic Idea
-
-Think of it like a cooking recipe where you mix two ingredients:
-
-**Ingredient 1: Semantic Score**
-- How well does this document match the *meaning* of your query?
-- Scale: 0.0 (no match) to 1.0 (perfect match)
-
-**Ingredient 2: Keyword Score**
-- How many matching words does this document have?
-- Scale: 0.0 (no words match) to 10+ (many words match)
-
-**The Recipe:**
-Mix them together with weights to get a final score!
-
-### The Three Steps
-
-**Step 1: Get Results from Both Searches**
-```
-Your query: "machine learning algorithms"
-
-Semantic search finds:
-- Doc A: About neural networks (0.95 similarity)
-- Doc B: About deep learning (0.88 similarity)
-- Doc C: About decision trees (0.82 similarity)
-
-Keyword search finds:
-- Doc C: Has "machine learning algorithms" (score: 8.5)
-- Doc D: Has "machine learning" (score: 5.2)
-- Doc A: Has "algorithms" (score: 2.1)
+Vector Search Result (similarity: 0.3):
+  → "Dell Inspiron laptop with Intel processor..." ✗ WRONG
+  
+Keyword Search Result (BM25 score: 45.2):
+  → "Apple MacBook Pro 16-inch M3 Max" ✓ CORRECT
 ```
 
-**Step 2: Normalize Scores**
+This is why a fixed 0.5/0.5 split fails catastrophically for product searches.
+
+### Problem #2: Score Ranges Don't Match
+
+**The mismatch:**
 ```
-Why? Semantic scores are 0-1, keyword scores are 0-10+
-They need to be on the same scale!
+Vector similarity scores: 0.3 to 0.4 (small range)
+BM25 keyword scores: 15 to 50 (large range)
 
-Normalized semantic:
-- Doc A: 1.0 (highest)
-- Doc B: 0.46
-- Doc C: 0.0 (lowest)
-
-Normalized keyword:
-- Doc C: 1.0 (highest)
-- Doc D: 0.48
-- Doc A: 0.0 (lowest)
+If you just add them together, BM25 dominates everything!
 ```
 
-**Step 3: Combine with Weights**
+**Concrete example:**
 ```
-Let's say we use 50/50 weights:
+Document A:
+  Vector: 0.35
+  BM25: 18.5
+  Naive sum: 18.85 ← BM25 score dominates
 
-Doc A: (1.0 × 0.5) + (0.0 × 0.5) = 0.5
-Doc B: (0.46 × 0.5) + (0.0 × 0.5) = 0.23
-Doc C: (0.0 × 0.5) + (1.0 × 0.5) = 0.5
-Doc D: (0.0 × 0.5) + (0.48 × 0.5) = 0.24
+Document B:
+  Vector: 0.42  ← Actually a better semantic match!
+  BM25: 15.0
+  Naive sum: 15.42 ← Ranks LOWER despite better meaning
 
-Ranking:
-1. Doc A and Doc C (tied at 0.5) ← Both appear in top results!
-2. Doc D (0.24)
-3. Doc B (0.23)
+Result: Your vector search becomes completely useless!
+```
+
+**You MUST normalize scores before combining. This is not optional.**
+
+### Problem #3: Different Queries Need Different Weights
+
+**Why 0.5/0.5 fails:**
+
+```
+Query 1: "MBP-M3MAX-32-1TB"
+What it needs: Keyword-heavy (0.2 vector / 0.8 keyword)
+Why: It's a product code, semantic search is useless here
+
+Query 2: "What's the best laptop for video editing?"
+What it needs: Vector-heavy (0.8 vector / 0.2 keyword)
+Why: Natural language question needs understanding
+
+Query 3: "Sony headphones"
+What it needs: Balanced (0.5 / 0.5)
+Why: Brand name + product category, both matter
+
+One weight setting cannot possibly work for all three!
 ```
 
 ---
 
-## Understanding Weights
+## How to Build Hybrid Search That Actually Works
 
-### What Are Weights?
+### Step 1: Score Normalization (CRITICAL)
 
-Weights control how much each search method influences the final results.
+You have three options. Here's when to use each:
 
-Think of it like adjusting your car's temperature:
-- **Turn left (more semantic):** Understanding meaning matters more
-- **Turn right (more keyword):** Exact words matter more
-- **Stay in middle:** Both matter equally
+#### Option 1: Min-Max Normalization
 
-### Common Weight Combinations
-
-**Pure Semantic (100% / 0%)**
+**Formula:**
 ```
-Best for: "How do I...?" questions
-Example: "How do I store data efficiently?"
-Why: Needs understanding, not specific terms
+normalized_score = (score - min_score) / (max_score - min_score)
 ```
 
-**Semantic-Heavy (70% / 30%)**
+**Example with BM25 scores:**
 ```
-Best for: Natural language queries
-Example: "Best way to manage containers at scale"
-Why: Mostly about concept, but some keywords help
-```
+Raw scores: [15, 25, 50]
+Min: 15, Max: 50, Range: 35
 
-**Balanced (50% / 50%)**
-```
-Best for: Mixed queries (default choice!)
-Example: "REST API methods GET POST"
-Why: Has both concept (API) and specific terms (GET, POST)
+Normalized:
+  15 → (15-15)/35 = 0.0
+  25 → (25-15)/35 = 0.286
+  50 → (50-15)/35 = 1.0
 ```
 
-**Keyword-Heavy (30% / 70%)**
+**Pros:** Simple, always gives 0-1 range  
+**Cons:** Sensitive to outliers (one extreme score skews everything)  
+**Use when:** Quick prototyping, well-behaved data
+
+#### Option 2: Z-Score Normalization
+
+**Formula:**
 ```
-Best for: Technical documentation
-Example: "PostgreSQL ACID transactions"
-Why: User knows exact terms they want
-```
-
-**Pure Keyword (0% / 100%)**
-```
-Best for: Exact term matching
-Example: "GraphQL schema directive"
-Why: Looking for very specific technical terms
-```
-
-### The Temperature Analogy
-
-```
-Cold ←────────────────────────────────→ Hot
-(More Semantic)                 (More Keyword)
-
-100/0    70/30    50/50    30/70    0/100
-  │        │        │        │        │
-  │        │        │        │        └─ Exact terms only
-  │        │        │        └─ Technical searches
-  │        │        └─ Mixed queries (default)
-  │        └─ Natural questions
-  └─ Pure concept searches
-
-Adjust based on your query type!
-```
-
----
-
-## Two Ways to Combine: Weighted vs RRF
-
-### Method 1: Weighted Combination (Score-Based)
-
-**How it works:**
-Uses the actual scores from each search.
-
-**The formula:**
-```
-Final Score = (Semantic Score × Semantic Weight) + (Keyword Score × Keyword Weight)
-```
-
-**Pros:**
-- Simple to understand
-- Easy to adjust (change weights)
-- Works well when scores are normalized
-
-**Cons:**
-- Sensitive to score scales
-- Requires good normalization
-
-**When to use:**
-- Default choice
-- When you want control over semantic/keyword balance
-
-### Method 2: Reciprocal Rank Fusion (Rank-Based)
-
-**How it works:**
-Uses the *position* (rank) instead of scores.
-
-**The idea:**
-```
-Position 1 (first place) = Best
-Position 2 (second place) = Good
-Position 3 (third place) = OK
-...and so on
-```
-
-**The formula:**
-```
-RRF Score = 1 / (k + rank)
-
-Where:
-- k = a constant (usually 60)
-- rank = position in results (1, 2, 3...)
+normalized_score = (score - mean) / standard_deviation
 ```
 
 **Example:**
 ```
-Semantic Results:        Keyword Results:
-1. Doc A (rank 1)       1. Doc C (rank 1)
-2. Doc B (rank 2)       2. Doc A (rank 2)
-3. Doc C (rank 3)       3. Doc D (rank 3)
+Raw scores: [15, 25, 50]
+Mean: 30, Std Dev: 14.79
+
+Normalized:
+  15 → (15-30)/14.79 = -1.01
+  25 → (25-30)/14.79 = -0.34
+  50 → (50-30)/14.79 = 1.35
+```
+
+**Pros:** Preserves distribution shape  
+**Cons:** Can give negative values, needs additional scaling  
+**Use when:** Statistical analysis matters
+
+#### Option 3: Rank-Based Normalization (RECOMMENDED)
+
+**Formula:**
+```
+normalized_score = rank_position / total_results
+```
+
+**Example:**
+```
+Sorted results:
+  1st place (score 50) → 1/3 = 0.33
+  2nd place (score 25) → 2/3 = 0.67
+  3rd place (score 15) → 3/3 = 1.0
+```
+
+**Pros:** Most robust, handles any score scale, used by RRF  
+**Cons:** Loses exact score magnitude  
+**Use when:** Production systems (this is what actually works)
+
+**Decision guide:**
+```
+Score scales vastly different? → Rank-Based (safest choice)
+Need exact precision? → Min-Max
+Statistical analysis? → Z-Score
+Not sure? → Rank-Based (production default)
+```
+
+---
+
+### Step 2: Dynamic Weight Selection
+
+**Stop hardcoding weights. Auto-detect query patterns instead.**
+
+You have two approaches: **rule-based** (fast, predictable) or **LLM-based** (smart, flexible).
+
+#### Approach A: Rule-Based Pattern Detection (Fast)
+
+**Best for:** Production systems, low latency requirements, predictable patterns
+
+```javascript
+function analyzeQuery(query) {
+    const upperCount = (query.match(/[A-Z]/g) || []).length;
+    const digitCount = (query.match(/\d/g) || []).length;
+    const hyphenCount = (query.match(/-/g) || []).length;
+    
+    // SKU/Product code pattern
+    // Examples: "MBP-M3MAX-32-1TB", "PROD-12345-XL"
+    if (hyphenCount >= 2 || (upperCount > 3 && digitCount > 0)) {
+        return { vector: 0.2, text: 0.8 }; // keyword-heavy
+    }
+    
+    // Natural language question
+    // Examples: "What laptop is best?", "How do I...?"
+    if (/^(what|how|which|why|when|where)/i.test(query)) {
+        return { vector: 0.8, text: 0.2 }; // vector-heavy
+    }
+    
+    // Brand + product (2 words, one capitalized)
+    // Examples: "Sony headphones", "Apple laptop"
+    const words = query.split(' ');
+    if (words.length === 2 && upperCount > 0) {
+        return { vector: 0.5, text: 0.5 }; // balanced
+    }
+    
+    // Default to balanced
+    return { vector: 0.5, text: 0.5 };
+}
+```
+
+**Pros:**
+- Fast (< 1ms)
+- Predictable
+- No API costs
+- Easy to debug
+
+**Cons:**
+- Limited to patterns you define
+- Can't handle nuanced queries
+- Requires manual tuning
+
+#### Approach B: LLM-Based Query Classification (Smart)
+
+**Best for:** Complex queries, when you need reasoning, high-quality search experiences
+
+```javascript
+async function analyzeQueryWithLLM(query) {
+    const prompt = `Analyze this search query and classify it to determine optimal search weights.
+
+Query: "${query}"
+
+Classify into ONE of these categories:
+
+1. PRODUCT_CODE: Contains SKU, product code, or alphanumeric identifier
+   Examples: "MBP-M3MAX-32-1TB", "SKU-12345", "PROD-001-XL"
+   Weights: vector=0.2, keyword=0.8
+
+2. NATURAL_QUESTION: Conversational question seeking recommendations
+   Examples: "What's the best laptop?", "How do I choose headphones?"
+   Weights: vector=0.8, keyword=0.2
+
+3. BRAND_CATEGORY: Brand name + product category
+   Examples: "Sony headphones", "Apple laptop", "Dell monitor"
+   Weights: vector=0.5, keyword=0.5
+
+4. TECHNICAL_TERM: Technical jargon, acronyms, specific terminology
+   Examples: "PostgreSQL ACID", "CNN architecture", "GraphQL schema"
+   Weights: vector=0.3, keyword=0.7
+
+5. FEATURE_SEARCH: Describes features or attributes
+   Examples: "wireless noise canceling", "16GB RAM laptop", "4K monitor"
+   Weights: vector=0.6, keyword=0.4
+
+Respond ONLY with JSON:
+{
+  "category": "CATEGORY_NAME",
+  "reasoning": "brief explanation",
+  "weights": { "vector": 0.X, "keyword": 0.X }
+}`;
+
+    const response = await llm.complete(prompt);
+    const result = JSON.parse(response);
+    
+    return {
+        vector: result.weights.vector,
+        text: result.weights.keyword,
+        reasoning: result.reasoning
+    };
+}
+```
+
+**Example LLM responses:**
+
+```javascript
+Query: "MBP-M3MAX-32-1TB"
+Response: {
+    "category": "PRODUCT_CODE",
+    "reasoning": "Contains alphanumeric code with hyphens typical of SKU",
+    "weights": { "vector": 0.2, "keyword": 0.8 }
+  }
+
+Query: "laptop for machine learning under $2000"
+Response: {
+    "category": "FEATURE_SEARCH",
+    "reasoning": "Describes use case (ML) and constraint (price)",
+    "weights": { "vector": 0.6, "keyword": 0.4 }
+  }
+
+Query: "how do Sony headphones compare to Bose"
+Response: {
+    "category": "NATURAL_QUESTION",
+    "reasoning": "Comparative question needing conceptual understanding",
+    "weights": { "vector": 0.8, "keyword": 0.2 }
+  }
+```
+
+**Pros:**
+- Handles complex/nuanced queries
+- Can reason about edge cases
+- Adapts to new patterns without code changes
+- Can explain its decisions
+
+**Cons:**
+- Slower (100-500ms)
+- Costs per query
+- Needs fallback if LLM fails
+- Less predictable
+
+#### Approach C: Hybrid (Best of Both)
+
+Use rule-based with LLM fallback for complex queries:
+
+```javascript
+async function analyzeQueryHybrid(query) {
+    // Fast path: Simple patterns
+    const ruleBasedResult = analyzeQueryRuleBased(query);
+    
+    // If confident, return immediately
+    if (ruleBasedResult.confidence > 0.8) {
+        return ruleBasedResult;
+    }
+    
+    // Slow path: LLM for complex queries
+    try {
+        const llmResult = await analyzeQueryWithLLM(query);
+        return llmResult;
+    } catch (error) {
+        // Fallback to rule-based
+        console.log("LLM failed, using rules");
+        return ruleBasedResult;
+    }
+}
+
+function analyzeQueryRuleBased(query) {
+    const upperCount = (query.match(/[A-Z]/g) || []).length;
+    const digitCount = (query.match(/\d/g) || []).length;
+    const hyphenCount = (query.match(/-/g) || []).length;
+    
+    // High confidence patterns
+    if (hyphenCount >= 2 || (upperCount > 3 && digitCount > 0)) {
+        return { 
+            vector: 0.2, 
+            text: 0.8, 
+            confidence: 0.95,
+            method: 'rule' 
+        };
+    }
+    
+    if (/^(what|how|which|why)/i.test(query)) {
+        return { 
+            vector: 0.8, 
+            text: 0.2, 
+            confidence: 0.85,
+            method: 'rule'
+        };
+    }
+    
+    // Low confidence - let LLM decide
+    return { 
+        vector: 0.5, 
+        text: 0.5, 
+        confidence: 0.5,
+        method: 'rule'
+    };
+}
+```
+
+#### When to Use Which Approach?
+
+```
+┌───────────────────────────────────────────────────────────┐
+│              QUERY CLASSIFICATION DECISION                │
+├───────────────────────────────────────────────────────────┤
+│                                                           │
+│ Simple, predictable queries (SKUs, brands)?               │
+│   → Rule-Based (Approach A)                               │
+│                                                           │
+│ Complex, nuanced queries (comparisons, multi-intent)?     │
+│   → LLM-Based (Approach B)                                │
+│                                                           │
+│ Mixed traffic, want best of both?                         │
+│   → Hybrid (Approach C)                                   │
+│                                                           │
+│ Ultra-low latency required (< 10ms)?                      │
+│   → Rule-Based only                                       │
+│                                                           │
+│ Cost is primary concern?                                  │
+│   → Rule-Based (free)                                     │
+│                                                           │
+│ Quality is primary concern?                               │
+│   → LLM-Based (best results)                              │
+│                                                           │
+└───────────────────────────────────────────────────────────┘
+```
+
+#### Real-World Performance Comparison
+
+Test queries and results:
+
+```
+Query: "MBP-M3MAX-32-1TB"
+├─ Rule-Based: ✓ 0.2/0.8 (correct) - 0.5ms
+└─ LLM-Based:  ✓ 0.2/0.8 (correct) - 180ms
+
+Query: "Sony headphones"  
+├─ Rule-Based: ✓ 0.5/0.5 (correct) - 0.3ms
+└─ LLM-Based:  ✓ 0.5/0.5 (correct) - 150ms
+
+Query: "laptop for machine learning under $2000 with good battery"
+├─ Rule-Based: ~ 0.5/0.5 (generic fallback) - 0.4ms
+└─ LLM-Based:  ✓ 0.6/0.4 (optimal feature search) - 220ms
+
+Query: "compare Sony WH-1000XM5 to Bose QC45 for travel"
+├─ Rule-Based: ~ 0.5/0.5 (generic fallback) - 0.3ms  
+└─ LLM-Based:  ✓ 0.7/0.3 (comparison question) - 200ms
+```
+
+**Key insight:** Rule-based handles ~70% of queries perfectly. LLM improves the remaining 30% of complex queries.
+
+#### Production Recommendation
+
+Start with rule-based, add LLM later:
+
+```javascript
+// Phase 1: Launch with rules (week 1)
+const weights = analyzeQueryRuleBased(query);
+
+// Phase 2: Add LLM for complex queries (week 4)
+const weights = await analyzeQueryHybrid(query);
+
+// Phase 3: Optimize with caching (week 8)
+const weights = await analyzeQueryHybridCached(query);
+```
+
+**Why this order?**
+1. Rules get you 80% of the way with zero cost
+2. Monitor which queries fail
+3. Add LLM only for those patterns
+4. Cache LLM results for repeated queries
+
+#### Query Pattern Examples
+
+**Pattern 1: Product Codes → Keyword-Heavy (0.2/0.8)**
+```
+"MBP-M3MAX-32-1TB"
+"SKU-99887-V2"
+"PROD-001-XL-BLK"
+
+Detection: Multiple hyphens + uppercase + digits
+Why keyword-heavy: Vector embeddings fail on codes
+```
+
+**Pattern 2: Questions → Vector-Heavy (0.8/0.2)**
+```
+"What's the best laptop for video editing?"
+"How do wireless headphones compare?"
+"Which monitor is good for gaming?"
+
+Detection: Starts with question words
+Why vector-heavy: Need conceptual understanding
+```
+
+**Pattern 3: Brand + Category → Balanced (0.5/0.5)**
+```
+"Sony headphones"
+"Apple laptop"
+"Dell monitor"
+
+Detection: Two words, one capitalized
+Why balanced: Both brand name and concept matter
+```
+
+---
+
+### Step 3: Multi-Field Indexing
+
+For product search, single-field indexing fails. You MUST index multiple fields.
+
+#### The Problem
+
+```
+Product data:
+  Title: "MacBook Pro 16-inch M3 Max"
+  Brand: "Apple"
+  SKU: "MBP-M3MAX-32-1TB"
+  Description: "Powerful laptop with advanced chip..."
+  Attributes: "M3 Max, 32GB RAM, 1TB SSD"
+
+Query: "Apple wireless keyboard"
+
+With single-field (description only):
+  ✗ Misses "Apple" in brand field
+  ✗ Misses exact title match
+  ✗ Only searches description text
+  Result: Poor results
+```
+
+#### The Solution
+
+```javascript
+// Index ALL relevant fields
+await vectorStore.setFullTextIndexedFields(namespace, [
+    'content',    // Full product description (semantic)
+    'title',      // Product name (keyword + semantic)
+    'brand',      // Apple, Dell, Sony (exact match)
+    'sku',        // Product codes (exact match)
+    'attributes'  // Technical specs (mixed)
+]);
+```
+
+#### How It Works
+
+```
+Query: "Apple wireless keyboard"
+
+Brand field matches:
+  "Apple" → Exact brand match (high keyword score)
+
+Title field matches:
+  "Magic Keyboard" → Contains "keyboard" (medium score)
+
+Description matches:
+  "Wireless connectivity..." → Semantic match (medium score)
+
+Combined result: Product surfaces because multiple fields contribute!
+```
+
+#### Product Catalog Structure
+
+```javascript
+// Structure your products like this:
+new Document(
+    "Apple MacBook Pro 16-inch with M3 Max chip, featuring...", 
+    {
+        id: "PROD-001",
+        title: "MacBook Pro 16-inch M3 Max",
+        brand: "Apple",
+        category: "laptops",
+        price: 3499,
+        sku: "MBP-M3MAX-32-1TB",
+        attributes: "M3 Max, 32GB RAM, 1TB SSD, 16-inch Liquid Retina XDR"
+    }
+)
+```
+
+**Why each field matters:**
+- `brand`: Exact brand searches ("Apple")
+- `sku`: Product code searches ("MBP-M3MAX-32-1TB")
+- `title`: Product name searches ("MacBook Pro")
+- `attributes`: Feature searches ("32GB RAM")
+- `content`: Natural language searches ("best laptop for coding")
+
+---
+
+### Step 4: Fallback Strategies
+
+Never show empty results when similar products exist.
+
+#### The Problem
+
+```
+User searches: "Microsoft laptop"
+Your catalog: Only Apple, Dell, HP laptops
+
+Keyword search: 0 results (no "Microsoft" products)
+Vector search: Finds similar laptops
+
+Without fallback: User sees "No results found" (terrible UX!)
+```
+
+#### The Solution
+
+```javascript
+async function searchWithFallback(query) {
+    // Attempt 1: Balanced search
+    let results = await hybridSearch(query, { 
+        vector: 0.5, 
+        text: 0.5,
+        limit: 10
+    });
+    
+    // Attempt 2: If few results, go vector-heavy
+    if (results.length < 3) {
+        console.log("Few results, expanding search...");
+        results = await hybridSearch(query, { 
+            vector: 0.8, 
+            text: 0.2,
+            limit: 10
+        });
+    }
+    
+    // Attempt 3: Pure semantic if still nothing
+    if (results.length === 0) {
+        console.log("No exact matches, finding similar...");
+        results = await hybridSearch(query, { 
+            vector: 1.0, 
+            text: 0.0,
+            limit: 10
+        });
+    }
+    
+    return results;
+}
+```
+
+#### User Experience
+
+```
+Query: "Microsoft laptop"
+
+Step 1 (Balanced 0.5/0.5):
+  → 0 results (no Microsoft in catalog)
+
+Step 2 (Vector-heavy 0.8/0.2):
+  → 3 results found!
+     - Dell Inspiron 15 (similar specs)
+     - HP Pavilion (similar price)
+     - Apple MacBook (similar category)
+
+Display message:
+  "No Microsoft laptops found. Here are similar options:"
+```
+
+---
+
+## Two Combination Methods: Weighted vs RRF
+
+### Method 1: Weighted Combination (Score-Based)
+
+**How it works:** Uses actual scores with adjustable weights
+
+**Formula:**
+```
+final_score = (vector_score × vector_weight) + (keyword_score × keyword_weight)
+```
+
+**Example:**
+```
+Document A:
+  Vector score: 0.8 (after normalization)
+  Keyword score: 0.3 (after normalization)
+  Weights: 0.7 vector / 0.3 keyword
+  
+Final: (0.8 × 0.7) + (0.3 × 0.3) = 0.56 + 0.09 = 0.65
+```
+
+**Pros:**
+- Simple and intuitive
+- Easy to tune weights
+- Full control over semantic/keyword balance
+
+**Cons:**
+- Requires good normalization
+- Sensitive to score distributions
+
+**When to use:** Default choice, especially when you want control
+
+### Method 2: Reciprocal Rank Fusion (RRF)
+
+**How it works:** Uses position/rank instead of scores
+
+**Formula:**
+```
+RRF_score = 1 / (k + rank)
+where k is a constant (typically 60)
+```
+
+**Example:**
+```
+Semantic results:          Keyword results:
+1. Doc A (rank 1)         1. Doc C (rank 1)
+2. Doc B (rank 2)         2. Doc A (rank 2)
+3. Doc C (rank 3)         3. Doc D (rank 3)
 
 RRF Scores (k=60):
 Doc A: 1/(60+1) + 1/(60+2) = 0.0164 + 0.0161 = 0.0325 ← Highest!
 Doc C: 1/(60+3) + 1/(60+1) = 0.0159 + 0.0164 = 0.0323
 Doc B: 1/(60+2) + 0        = 0.0161
 Doc D: 0        + 1/(60+3) = 0.0159
-
-Winner: Doc A (appeared high in both searches)
 ```
 
 **Pros:**
-- Less sensitive to score differences
-- More stable across different queries
 - No normalization needed
+- Very stable across queries
+- Less sensitive to score scale issues
 
 **Cons:**
 - Can't easily adjust semantic/keyword balance
-- A bit harder to understand
+- Slightly less intuitive
 
-**When to use:**
-- When score scales vary a lot
-- When you want stable, consistent results
-- When normalization is tricky
+**When to use:** Score scales vary wildly, want "set and forget"
 
-### Which One Should You Use?
-
-**Use Weighted when:**
-- You want to tune the semantic/keyword balance
-- Your scores are well-normalized
-- You understand your query patterns
-
-**Use RRF when:**
-- Score scales are very different
-- You want "set it and forget it" stability
-- Normalization is causing issues
-
-**Pro tip:** Try both and see which gives better results for your data!
-
----
-
-## Understanding BM25 (The Keyword Search Algorithm)
-
-### What is BM25?
-
-BM25 is the algorithm that powers keyword search. Think of it as a smart way to score documents based on word matches.
-
-**BM stands for:** "Best Matching"
-
-### How BM25 Thinks
-
-**Scenario:** You search for "machine learning"
-
-**BM25 asks three questions:**
-
-**1. Does the document have these words?**
-```
-Doc A: Has "machine learning" 5 times ✓
-Doc B: Has "machine learning" 1 time ✓
-Doc C: Doesn't have these words ✗
-
-Result: Doc C gets score of 0
-```
-
-**2. How rare are these words?**
-```
-"machine" appears in 50% of documents (common)
-"learning" appears in 30% of documents (less common)
-
-Logic: Rare words are more important!
-"learning" gets higher importance than "machine"
-```
-
-**3. How long is the document?**
-```
-Doc A: 100 words, "machine learning" appears 5 times (5%)
-Doc B: 50 words, "machine learning" appears 1 time (2%)
-
-Logic: Doc A has higher density, gets higher score!
-```
-
-### The Two BM25 Knobs
-
-BM25 has two parameters you can adjust:
-
-**Knob 1: k1 (Term Frequency Saturation)**
-```
-Low k1 (1.2):
-"machine machine machine" ≈ "machine"
-(Repetition doesn't matter much)
-
-High k1 (2.0):
-"machine machine machine" >> "machine"
-(More repetition = higher score)
-
-Default: 1.5 (balanced)
-```
-
-**Knob 2: b (Length Normalization)**
-```
-b = 0.0 (No penalty):
-Long and short docs treated equally
-
-b = 1.0 (Full penalty):
-Long docs penalized
-(Short, focused docs preferred)
-
-Default: 0.75 (mostly penalize length)
-```
-
-**When to adjust:**
-- Most of the time, defaults work great!
-- Tweak if your results seem off
-- Test before changing
-
----
-
-## Query Types and Best Strategies
-
-### The Four Query Types
-
-**Type 1: Specific Technical Terms**
-```
-Example: "CNN transformer architecture"
-Has: Specific acronyms and terms
-Best Strategy: Keyword-Heavy (30/70)
-Why: User knows exact terminology
-```
-
-**Type 2: Natural Language Questions**
-```
-Example: "How do I scale applications?"
-Has: Conversational language
-Best Strategy: Semantic-Heavy (70/30)
-Why: Needs understanding, not exact matches
-```
-
-**Type 3: Conceptual Descriptions**
-```
-Example: "Best practices for data storage"
-Has: General concepts
-Best Strategy: Semantic-Heavy (70/30)
-Why: Many ways to phrase the same concept
-```
-
-**Type 4: Mixed Queries**
-```
-Example: "PostgreSQL with JSON support"
-Has: Specific term (PostgreSQL) + concept (JSON support)
-Best Strategy: Balanced (50/50)
-Why: Both aspects matter equally
-```
-
-### Quick Decision Guide
+### Which Should You Use?
 
 ```
-Does your query have acronyms or very specific terms?
-    ↓ YES → Use Keyword-Heavy (30/70)
-    ↓ NO
-    
-Is it a "How do I...?" or "What is...?" question?
-    ↓ YES → Use Semantic-Heavy (70/30)
-    ↓ NO
-    
-Use Balanced (50/50) as default
+Use Weighted when:
+  ✓ You want fine control over weights
+  ✓ Scores are well-normalized
+  ✓ You understand your query patterns
+
+Use RRF when:
+  ✓ Score ranges are very different
+  ✓ You want maximum stability
+  ✓ Normalization is problematic
 ```
 
 ---
 
 ## Real-World Examples
 
-### Example 1: Technical Documentation Search
+### Example 1: E-commerce SKU Search
 
-**Query:** "PostgreSQL ACID transactions"
+**Query:** `"MBP-M3MAX-32-1TB"`
 
-**What's happening:**
-- User knows exact terms: "PostgreSQL", "ACID"
-- Looking for specific technical info
+**Auto-detected weights:** Keyword-heavy (0.2/0.8)
 
-**Best approach:** Keyword-Heavy (30/70)
+**What happens:**
+```
+Vector search (20% weight):
+  Similarity: 0.4 → Finds MacBook Pro category
+  Normalized: 0.4
+  
+Keyword search (80% weight):
+  BM25: 45.2 → Exact SKU match!
+  Normalized: 0.95
 
-**Why it works:**
-- Keyword search finds exact "PostgreSQL" and "ACID"
-- Semantic search adds related transaction concepts
-- Perfect combo for technical docs!
+Combined: (0.4 × 0.2) + (0.95 × 0.8) = 0.08 + 0.76 = 0.84 ✓
+```
 
-### Example 2: Help Center Search
+**Without dynamic weights (0.5/0.5):**
+```
+Combined: (0.4 × 0.5) + (0.95 × 0.5) = 0.20 + 0.475 = 0.675
+Generic products might rank higher! ✗
+```
 
-**Query:** "How do I reset my password?"
+### Example 2: Natural Language Question
 
-**What's happening:**
-- Natural language question
-- Could be phrased many ways
-- Concept: password reset
+**Query:** `"What's the best laptop for video editing?"`
 
-**Best approach:** Semantic-Heavy (70/30)
+**Auto-detected weights:** Vector-heavy (0.8/0.2)
 
-**Why it works:**
-- Semantic search understands "reset password" concept
-- Finds articles about password recovery, account access, etc.
-- Keyword search ensures "password" appears
-- User gets help even if exact phrasing differs!
+**What happens:**
+```
+Vector search (80% weight):
+  Understands: video editing = high performance, graphics, RAM
+  Finds: MacBook Pro M3 Max, Dell XPS 15, etc.
+  Normalized: 0.88
 
-### Example 3: E-commerce Product Search
+Keyword search (20% weight):
+  Matches: "laptop", "video", "editing"
+  Normalized: 0.6
 
-**Query:** "wireless headphones noise canceling"
+Combined: (0.88 × 0.8) + (0.6 × 0.2) = 0.704 + 0.12 = 0.824 ✓
+```
 
-**What's happening:**
-- Specific features: wireless, noise canceling
-- Product category: headphones
+### Example 3: Brand + Category
 
-**Best approach:** Balanced (50/50)
+**Query:** `"Sony headphones"`
 
-**Why it works:**
-- Keyword search finds products with exact features
-- Semantic search includes similar terms (Bluetooth, ANC)
-- Gets both exact matches and related products
+**Auto-detected weights:** Balanced (0.5/0.5)
 
-### Example 4: Academic Paper Search
+**What happens:**
+```
+Vector search (50% weight):
+  Finds: Audio products, similar Sony items
+  Normalized: 0.75
 
-**Query:** "neural network optimization techniques"
+Keyword search (50% weight):
+  Exact matches: "Sony" in brand + "headphones" in title
+  Normalized: 0.90
 
-**What's happening:**
-- Technical but broad
-- Multiple related concepts
+Combined: (0.75 × 0.5) + (0.90 × 0.5) = 0.375 + 0.45 = 0.825 ✓
+```
 
-**Best approach:** Semantic-Heavy (60/40)
+### Example 4: Fallback in Action
 
-**Why it works:**
-- Semantic search finds conceptually related papers
-- Understands "optimization" = training, learning, etc.
-- Keyword search ensures core terms appear
-- Finds papers even if they use different terminology
+**Query:** `"Microsoft laptop"`  
+**Problem:** No Microsoft products in catalog
+
+**Fallback sequence:**
+```
+Attempt 1 (Balanced 0.5/0.5):
+  Keyword: 0 matches (no "Microsoft")
+  Vector: 0.3 similarity (finds laptops generally)
+  Result: 0 strong matches
+
+Attempt 2 (Vector-heavy 0.8/0.2):
+  Vector: 0.8 similarity (finds similar laptops)
+  Results: Dell Inspiron, HP Pavilion, etc.
+  Display: "No Microsoft laptops. Similar options:"
+```
+
+---
+
+## Combining with Filters
+
+Hybrid search + metadata filters = production-ready search
+
+### Implementation
+
+```javascript
+async function searchProducts(query, filters = {}) {
+    // Step 1: Auto-detect query type
+    const weights = analyzeQuery(query);
+    
+    // Step 2: Perform hybrid search
+    let results = await hybridSearch(query, weights);
+    
+    // Step 3: Apply filters
+    if (filters.category) {
+        results = results.filter(r => 
+            r.metadata.category === filters.category
+        );
+    }
+    
+    if (filters.priceRange) {
+        const [min, max] = filters.priceRange;
+        results = results.filter(r => 
+            r.metadata.price >= min && r.metadata.price <= max
+        );
+    }
+    
+    if (filters.brand) {
+        results = results.filter(r => 
+            r.metadata.brand === filters.brand
+        );
+    }
+    
+    return results;
+}
+```
+
+### Example Usage
+
+```javascript
+// Natural language + price filter
+const results = await searchProducts(
+    "best laptop for gaming",
+    {
+        category: "laptops",
+        priceRange: [1000, 2000]
+    }
+);
+
+// Hybrid search: Finds relevant gaming laptops
+// Filters: Only those priced $1000-$2000
+```
+
+---
+
+## Understanding BM25
+
+BM25 is the keyword search algorithm. Here's what actually matters:
+
+### The Three Questions BM25 Asks
+
+**1. Does the document contain the search terms?**
+```
+Query: "machine learning"
+Doc A: Contains both terms ✓
+Doc B: Contains "machine" only
+Doc C: Contains neither ✗
+```
+
+**2. How rare are the terms?**
+```
+"the" appears in 90% of docs → Low importance
+"GraphQL" appears in 5% of docs → High importance
+
+Rare terms get higher scores!
+```
+
+**3. How long is the document?**
+```
+Doc A: 100 words, "machine learning" appears 5 times (5% density)
+Doc B: 500 words, "machine learning" appears 5 times (1% density)
+
+Doc A scores higher (better density)!
+```
+
+### The Two BM25 Parameters
+
+**k1 (Term Frequency Saturation):**
+```
+Low k1 (1.2): "machine machine machine" ≈ "machine"
+High k1 (2.0): More repetition = much higher score
+Default: 1.5 (balanced)
+```
+
+**b (Length Normalization):**
+```
+b = 0.0: No penalty for long documents
+b = 1.0: Strong penalty for long documents
+Default: 0.75 (mostly penalize length)
+```
+
+**Pro tip:** The defaults work well 99% of the time. Only tune if results seem off.
 
 ---
 
 ## Common Patterns and Tips
 
-### Pattern 1: Start Balanced, Then Adjust
+### Pattern 1: Start Simple, Then Optimize
 
 ```
-Step 1: Use 50/50 for all queries
-Step 2: Track which queries work well
-Step 3: Identify patterns (technical vs conversational)
-Step 4: Adjust weights for each pattern
+Week 1: Use balanced (0.5/0.5) for everything
+Week 2: Track which queries work/fail
+Week 3: Identify patterns (SKUs, questions, brands)
+Week 4: Implement auto-detection
 ```
 
-### Pattern 2: Auto-Detect Query Type
-
-**Simple detection rules:**
-```
-Has ALL CAPS terms? → Probably technical (30/70)
-Starts with "How/What/Why"? → Probably question (70/30)
-Has quotes? → Looking for exact phrase (30/70)
-Multiple words, no special patterns? → Use balanced (50/50)
-```
-
-### Pattern 3: Let Users Choose
+### Pattern 2: Auto-Detection Rules
 
 ```
-Search box with options:
-○ General search (50/50)
-○ Exact terms (30/70)
-○ Conceptual (70/30)
+SKU codes (hyphens + caps + digits) → 0.2/0.8
+Questions (what/how/why) → 0.8/0.2
+Brand names (2 words, capitalized) → 0.5/0.5
+Technical terms (multiple caps) → 0.3/0.7
+Everything else → 0.5/0.5
 ```
 
-### Pattern 4: Use Metadata Filters
+### Pattern 3: Let Users Tune
 
-**Combine hybrid search with filters:**
 ```
-Hybrid search finds: Best matching documents
-Filters narrow down: By category, date, type, etc.
+Search bar with mode selector:
+○ Exact match (keyword-heavy)
+○ Similar results (semantic-heavy)
+○ Balanced (default)
+```
 
-Example:
-Query: "machine learning"
-Filter: category = "tutorials"
-Result: ML tutorials only!
+### Pattern 4: Monitor and Iterate
+
+```
+Log every search:
+  - Query text
+  - Detected weights
+  - Result count
+  - Click-through rate
+
+Analyze weekly:
+  - Which patterns work?
+  - Which fail?
+  - Adjust detection logic
 ```
 
 ---
 
 ## When Hybrid Search Really Shines
 
-### Scenario 1: Multi-Language Codebases
+### Scenario 1: E-commerce
 
-**Problem:** Code uses specific terms, docs use natural language
+**Why it's perfect:**
+- SKU codes (keyword search)
+- Product descriptions (semantic search)
+- Brand names (exact matches)
+- Feature searches (conceptual)
 
-**Solution:**
-- Keyword search: Finds exact function names, error codes
-- Semantic search: Finds explanatory documentation
-- Together: Connects code and docs!
+**Example:**
+```
+"wireless headphones under $100"
+→ Multi-field search across title, attributes, price
+→ Semantic understanding of "wireless"
+→ Keyword match on "$100"
+```
 
-### Scenario 2: Support Tickets
+### Scenario 2: Help Centers
 
-**Problem:** Users describe issues in many different ways
+**Why it's perfect:**
+- Users ask questions many ways
+- Need conceptual understanding
+- But also need exact error codes
 
-**Solution:**
-- Keyword search: Catches specific error messages
-- Semantic search: Understands problem descriptions
-- Together: Finds solutions regardless of phrasing!
+**Example:**
+```
+"how do I reset my password"
+→ Semantic: Understands intent
+→ Keyword: Ensures "password" appears
+→ Finds all password recovery articles
+```
 
-### Scenario 3: Research Databases
+### Scenario 3: Technical Documentation
 
-**Problem:** Need both precision and recall
+**Why it's perfect:**
+- Specific terms matter (PostgreSQL, ACID)
+- But concepts matter too (transactions)
 
-**Solution:**
-- Keyword search: Ensures important terms appear (precision)
-- Semantic search: Finds related papers (recall)
-- Together: Comprehensive results!
+**Example:**
+```
+"PostgreSQL ACID transactions"
+→ Keyword: Exact "PostgreSQL" and "ACID"
+→ Semantic: Related transaction concepts
+→ Perfect technical matches
+```
 
-### Scenario 4: Legal/Compliance Documents
+### Scenario 4: Code Search
 
-**Problem:** Need exact terms but also related concepts
+**Why it's perfect:**
+- Function names (exact keywords)
+- Descriptions (semantic)
+- Comments (conceptual)
 
-**Solution:**
-- Keyword search: Finds exact legal terms
-- Semantic search: Finds related clauses
-- Together: Nothing slips through!
+**Example:**
+```
+"function to parse JSON"
+→ Keyword: "parse", "JSON"
+→ Semantic: Similar to "decode", "deserialize"
+→ Finds all relevant code
+```
 
 ---
 
-## The Big Picture
+### The Golden Rules
 
-### What Makes Hybrid Search Powerful
-
-**1. Complementary Strengths**
-```
-Semantic search covers: Meaning, concepts, intent
-Keyword search covers: Exact terms, specifics, precision
-Together: Complete coverage!
-```
-
-**2. Adaptability**
-```
-Technical query → More keyword
-Natural query → More semantic
-Mixed query → Balanced
-Different queries, optimal strategy!
-```
-
-**3. Fault Tolerance**
-```
-If one search fails, the other catches it:
-- Typo in query? Semantic search still works
-- Vague query? Keyword search finds specific terms
-- Best of both = consistent results
-```
-
-**4. User Satisfaction**
-```
-Users get relevant results whether they:
-- Know exact terminology (keyword wins)
-- Describe what they want (semantic wins)
-- Mix both (hybrid wins!)
-```
-
-### The Mental Model
-
-Think of hybrid search as having **two flashlights** in a dark room:
-
-**Flashlight #1 (Semantic):**
-- Wide beam: Illuminates general area
-- Finds things by shape and context
-- Great for exploration
-
-**Flashlight #2 (Keyword):**
-- Narrow beam: Pinpoints specific spots
-- Finds things by exact location
-- Great for precision
-
-**Both together:**
-- See the whole room clearly
-- Find specific items easily
-- Best visibility!
+1. **Always normalize scores** (rank-based is safest)
+2. **Auto-detect query patterns** (don't hardcode weights)
+3. **Index multiple fields** (especially for products)
+4. **Implement fallbacks** (never show empty results)
+5. **Start balanced, then optimize** (measure everything)
 
 ---
 
-## Key Takeaways
+## Quick Reference
 
-### The Three Core Ideas
+![Hybrid Search Decision Tree](../../../images/hybrid-search-decision-tree.png)
 
-**1. Hybrid = Semantic + Keyword**
-- Semantic understands meaning
-- Keyword matches exact words
-- Together they're unstoppable
-
-**2. Weights Control the Balance**
-- 70/30 for questions
-- 30/70 for technical terms
-- 50/50 when unsure
-
-**3. Different Queries Need Different Strategies**
-- Analyze your query
-- Choose appropriate weights
-- Get better results!
-
-### Remember This
-
+### Normalization Methods:
 ```
-Vector Search Alone:  Good but sometimes misses exact terms
-Keyword Search Alone: Good but sometimes misses concepts
-Hybrid Search:        Combines both = Best results! ✨
+┌─────────────────┬──────────────┬─────────────┬──────────────────┐
+│ Method          │ Best For     │ Pros        │ Cons             │
+├─────────────────┼──────────────┼─────────────┼──────────────────┤
+│ Rank-Based      │ Production   │ Most robust │ Loses magnitude  │
+│ (RECOMMENDED)   │ systems      │ No outliers │                  │
+├─────────────────┼──────────────┼─────────────┼──────────────────┤
+│ Min-Max         │ Prototyping  │ Simple      │ Outlier          │
+│                 │              │ Fast        │ sensitive        │
+├─────────────────┼──────────────┼─────────────┼──────────────────┤
+│ Z-Score         │ Statistical  │ Preserves   │ Can be negative  │
+│                 │ analysis     │ distribution│                  │
+└─────────────────┴──────────────┴─────────────┴──────────────────┘
 ```
 
-### The Golden Rule
-
-**Start with balanced (50/50), then optimize based on your specific needs.**
-
----
-
-## Next Steps
-
-**To implement hybrid search:**
-
-1. **Start simple**
-    - Use balanced weights (50/50)
-    - See how it performs
-
-2. **Analyze your queries**
-    - What types do you get?
-    - Technical? Conversational? Mixed?
-
-3. **Adjust weights**
-    - Technical → More keyword
-    - Conversational → More semantic
-
-4. **Test and measure**
-    - Track what works
-    - Refine over time
-
-5. **Consider auto-detection**
-    - Classify queries automatically
-    - Apply optimal strategy per type
-
-**You're now ready to understand and use hybrid search!** 🚀
-
----
-
-## Quick Reference Card
-
+### Combination Methods:
 ```
-┌─────────────────────────────────────────────────────┐
-│              HYBRID SEARCH CHEAT SHEET              │
-├─────────────────────────────────────────────────────┤
-│ Query Type            → Best Strategy               │
-├─────────────────────────────────────────────────────┤
-│ "How do I...?"        → Semantic-Heavy (70/30)      │
-│ "GraphQL API"         → Keyword-Heavy (30/70)       │
-│ "Best practices..."   → Semantic-Heavy (70/30)      │
-│ "PostgreSQL ACID"     → Keyword-Heavy (30/70)       │
-│ Mixed/Unsure          → Balanced (50/50)            │
-├─────────────────────────────────────────────────────┤
-│ Combining Method      → When to Use                 │
-├─────────────────────────────────────────────────────┤
-│ Weighted              → Most cases (default)        │
-│ RRF                   → Score scales vary a lot     │
-└─────────────────────────────────────────────────────┘
+┌─────────────┬───────────────┬──────────────────┬────────────────┐
+│ Method      │ Control Level │ Requires         │ Best For       │
+├─────────────┼───────────────┼──────────────────┼────────────────┤
+│ Weighted    │ Full control  │ Normalization    │ Fine-tuning    │
+│             │ over balance  │                  │                │
+├─────────────┼───────────────┼──────────────────┼────────────────┤
+│ RRF         │ Less tunable  │ Nothing          │ Stability,     │
+│             │               │                  │ set-and-forget │
+└─────────────┴───────────────┴──────────────────┴────────────────┘
 ```

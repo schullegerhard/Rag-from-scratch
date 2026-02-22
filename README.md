@@ -388,8 +388,3 @@ If you have a clear, educational RAG example, open a PR.
 
 ---
 
-## See Also
-
-- [AI Agents from Scratch](https://github.com/pguso/ai-agents-from-scratch)
-- [LangChain RAG Concepts](https://docs.langchain.com/oss/python/langchain/rag)
-- [Best AI tools for RAG](https://codingscape.com/blog/best-ai-tools-for-retrieval-augmented-generation-rag)

@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG from Scratch - Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 14px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: 100%;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .response {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+            display: none;
+        }
+
+        .response.show {
+            display: block;
+        }
+
+        .response h3 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .response pre {
+            background: #fff;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            color: #666;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 RAG from Scratch</h1>
+        <p class="subtitle">Retrieval-Augmented Generation Demo</p>
+
+        <div id="status" class="status info">
+            Checking API connection...
+        </div>
+
+        <form id="ragForm">
+            <div class="form-group">
+                <label for="query">Enter your question:</label>
+                <input 
+                    type="text" 
+                    id="query" 
+                    name="query" 
+                    placeholder="Ask anything about your documents..."
+                    required
+                >
+            </div>
+
+            <button type="submit" id="submitBtn">
+                <span id="btnText">Query RAG System</span>
+            </button>
+        </form>
+
+        <div id="response" class="response">
+            <h3>Response:</h3>
+            <pre id="responseContent"></pre>
+        </div>
+
+        <div class="footer">
+            Powered by RAG from Scratch Library
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api';
+
+        // Check API health on load
+        async function checkHealth() {
+            try {
+                const response = await fetch(API_URL);
+                const data = await response.json();
+                
+                const statusEl = document.getElementById('status');
+                if (data.status === 'ok') {
+                    statusEl.className = 'status success';
+                    statusEl.textContent = '✅ API is connected and ready!';
+                } else {
+                    throw new Error('API not responding correctly');
+                }
+            } catch (error) {
+                const statusEl = document.getElementById('status');
+                statusEl.className = 'status error';
+                statusEl.textContent = '❌ Unable to connect to API. Please check the server.';
+                console.error('Health check failed:', error);
+            }
+        }
+
+        // Handle form submission
+        document.getElementById('ragForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const query = document.getElementById('query').value;
+            const submitBtn = document.getElementById('submitBtn');
+            const btnText = document.getElementById('btnText');
+            const responseEl = document.getElementById('response');
+            const responseContent = document.getElementById('responseContent');
+
+            // Disable button and show loading
+            submitBtn.disabled = true;
+            btnText.innerHTML = '<span class="loading"></span>Processing...';
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'query',
+                        query: query
+                    })
+                });
+
+                const data = await response.json();
+                
+                // Show response
+                responseContent.textContent = JSON.stringify(data, null, 2);
+                responseEl.classList.add('show');
+
+                // Update status
+                const statusEl = document.getElementById('status');
+                statusEl.className = 'status success';
+                statusEl.textContent = '✅ Query processed successfully!';
+
+            } catch (error) {
+                const statusEl = document.getElementById('status');
+                statusEl.className = 'status error';
+                statusEl.textContent = '❌ Error: ' + error.message;
+                
+                responseContent.textContent = 'Error: ' + error.message;
+                responseEl.classList.add('show');
+                
+                console.error('Query error:', error);
+            } finally {
+                // Re-enable button
+                submitBtn.disabled = false;
+                btnText.textContent = 'Query RAG System';
+            }
+        });
+
+        // Check health on page load
+        checkHealth();
+    </script>
+</body>
+</html>
+
